@@ -25,6 +25,13 @@ All policies implement the minimal `Policy` protocol:
   play. It separates cases by current winner, player position in the trick, and
   trick value.
 
+## Features
+
+- `BriscolaFeatureExtractor`: builds numeric features from a legal
+  `Osservazione` and a legal candidate card. It is intended for learnable
+  policies such as a future linear softmax policy, and does not use hidden game
+  state.
+
 ## Tests
 
 Run policy tests from the repository root:
