@@ -81,6 +81,7 @@ class TestSelfPlayConfig(unittest.TestCase):
         self.assertIsInstance(config.reward_config, RewardConfig)
         self.assertIsInstance(config.reinforce_config, ReinforceConfig)
         self.assertFalse(config.greedy_non_learner)
+        self.assertEqual(config.matchup_sampling, "per_episode")
 
     def test_config_rifiuta_valori_illegali(self):
         # Fail fast on batch, snapshot interval, and player id.
@@ -95,6 +96,9 @@ class TestSelfPlayConfig(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             SelfPlayConfig(learner_giocatore_id=4)
+
+        with self.assertRaises(ValueError):
+            SelfPlayConfig(matchup_sampling="unknown")  # type: ignore[arg-type]
 
 
 class TestSelfPlayTrainer(unittest.TestCase):
@@ -255,6 +259,59 @@ class TestSelfPlayTrainer(unittest.TestCase):
             self.assertIs(call.kwargs["compagno_policy"], shared_policy)
             self.assertIs(call.kwargs["avversario_successivo_policy"], shared_policy)
             self.assertIs(call.kwargs["avversario_precedente_policy"], shared_policy)
+
+    def test_pool_viene_campionato_tre_volte_per_blocco_di_rotazione(self):
+        # A rotation block keeps the matchup fixed while primo_giocatore_id rotates.
+        learner = FakePolicy("learner")
+        pool = FakePool(snapshots=[FakePolicy("initial")])
+        config = SelfPlayConfig(
+            batch_size=8,
+            snapshot_interval=99,
+            matchup_sampling="per_rotation_block",
+        )
+
+        with (
+            patch("training.self_play.collect_episode", return_value=episodio_finto()) as collect,
+            patch("training.self_play.reinforce_update", return_value=stats_finte(8)),
+        ):
+            trainer = SelfPlayTrainer(  # type: ignore[arg-type]
+                learner=learner,
+                pool=pool,
+                config=config,
+            )
+            trainer.train_update()
+
+        self.assertEqual(pool.sample_calls, 6)
+        self.assertEqual(
+            [
+                call.kwargs["primo_giocatore_id"]
+                for call in collect.call_args_list
+            ],
+            [0, 1, 2, 3, 0, 1, 2, 3],
+        )
+
+        first_block = collect.call_args_list[:4]
+        second_block = collect.call_args_list[4:]
+        for call in first_block:
+            self.assertEqual(call.kwargs["compagno_policy"].name, "sample_1")
+            self.assertEqual(
+                call.kwargs["avversario_successivo_policy"].name,
+                "sample_2",
+            )
+            self.assertEqual(
+                call.kwargs["avversario_precedente_policy"].name,
+                "sample_3",
+            )
+        for call in second_block:
+            self.assertEqual(call.kwargs["compagno_policy"].name, "sample_4")
+            self.assertEqual(
+                call.kwargs["avversario_successivo_policy"].name,
+                "sample_5",
+            )
+            self.assertEqual(
+                call.kwargs["avversario_precedente_policy"].name,
+                "sample_6",
+            )
 
     def test_train_esegue_piu_update_e_rifiuta_valore_negativo(self):
         # train(updates) is only an explicit repetition of train_update.

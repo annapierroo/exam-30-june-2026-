@@ -4,14 +4,28 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
+from typing import Literal
 
 from game.rules import NUMERO_GIOCATORI, valida_giocatore_id
-from policy import LinearSoftmaxPolicy
+from policy import LinearSoftmaxPolicy, Policy
 
 from .episode import EpisodeResult, collect_episode
 from .pool import SnapshotPool
 from .reinforce import ReinforceConfig, TrainStats, reinforce_update
 from .rewards import RewardConfig
+
+
+MatchupSamplingMode = Literal["per_episode", "per_rotation_block"]
+MATCHUP_SAMPLING_MODES = {"per_episode", "per_rotation_block"}
+
+
+@dataclass(frozen=True)
+class PolicyMatchup:
+    """Fixed non-learner policy trio used in one or more episodes."""
+
+    compagno_policy: Policy
+    avversario_successivo_policy: Policy
+    avversario_precedente_policy: Policy
 
 
 @dataclass(frozen=True)
@@ -24,6 +38,7 @@ class SelfPlayConfig:
     reward_config: RewardConfig = field(default_factory=RewardConfig)
     reinforce_config: ReinforceConfig = field(default_factory=ReinforceConfig)
     greedy_non_learner: bool = False
+    matchup_sampling: MatchupSamplingMode = "per_episode"
 
     def __post_init__(self) -> None:
         if self.batch_size <= 0:
@@ -32,6 +47,8 @@ class SelfPlayConfig:
             raise ValueError("batch_size deve essere multiplo di 4")
         if self.snapshot_interval <= 0:
             raise ValueError("snapshot_interval deve essere positivo")
+        if self.matchup_sampling not in MATCHUP_SAMPLING_MODES:
+            raise ValueError(f"Matchup sampling non supportato: {self.matchup_sampling}")
         valida_giocatore_id(self.learner_giocatore_id)
 
 
@@ -68,10 +85,7 @@ class SelfPlayTrainer:
     def train_update(self) -> SelfPlayStats:
         """Collect a balanced batch and update only the learner policy."""
 
-        episodes = [
-            self._collect_training_episode(episode_index)
-            for episode_index in range(self.config.batch_size)
-        ]
+        episodes = self._collect_training_batch()
         train_stats = reinforce_update(
             self.learner,
             episodes,
@@ -102,16 +116,55 @@ class SelfPlayTrainer:
             raise ValueError("updates deve essere non negativo")
         return [self.train_update() for _ in range(updates)]
 
-    def _collect_training_episode(self, episode_index: int) -> EpisodeResult:
-        primo_giocatore_id = episode_index % NUMERO_GIOCATORI
-        seed_ambiente = self.master_rng.getrandbits(32)
-        seed_policy = self.master_rng.getrandbits(32)
+    def _collect_training_batch(self) -> list[EpisodeResult]:
+        if self.config.matchup_sampling == "per_episode":
+            return [
+                self._collect_training_episode(
+                    primo_giocatore_id=episode_index % NUMERO_GIOCATORI,
+                )
+                for episode_index in range(self.config.batch_size)
+            ]
 
-        return collect_episode(
-            learner_policy=self.learner,
+        if self.config.matchup_sampling == "per_rotation_block":
+            episodes: list[EpisodeResult] = []
+            for _ in range(self.config.batch_size // NUMERO_GIOCATORI):
+                matchup = self._sample_matchup()
+                for primo_giocatore_id in range(NUMERO_GIOCATORI):
+                    episodes.append(
+                        self._collect_training_episode(
+                            primo_giocatore_id=primo_giocatore_id,
+                            matchup=matchup,
+                        )
+                    )
+            return episodes
+
+        raise ValueError(
+            f"Matchup sampling non supportato: {self.config.matchup_sampling}"
+        )
+
+    def _sample_matchup(self) -> PolicyMatchup:
+        return PolicyMatchup(
             compagno_policy=self.pool.sample_policy(self.master_rng),
             avversario_successivo_policy=self.pool.sample_policy(self.master_rng),
             avversario_precedente_policy=self.pool.sample_policy(self.master_rng),
+        )
+
+    def _collect_training_episode(
+        self,
+        *,
+        primo_giocatore_id: int,
+        matchup: PolicyMatchup | None = None,
+    ) -> EpisodeResult:
+        seed_ambiente = self.master_rng.getrandbits(32)
+        seed_policy = self.master_rng.getrandbits(32)
+        if matchup is None:
+            matchup = self._sample_matchup()
+
+        return collect_episode(
+            learner_policy=self.learner,
+            compagno_policy=matchup.compagno_policy,
+            avversario_successivo_policy=matchup.avversario_successivo_policy,
+            avversario_precedente_policy=matchup.avversario_precedente_policy,
             learner_giocatore_id=self.config.learner_giocatore_id,
             seed_ambiente=seed_ambiente,
             primo_giocatore_id=primo_giocatore_id,

@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from policy import BriscolaFeatureExtractor, LinearSoftmaxPolicy
 from training import (
     BASELINE_MODES,
+    MATCHUP_SAMPLING_MODES,
     REWARD_MODES,
     ReinforceConfig,
     RewardConfig,
@@ -58,6 +59,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reward-alpha", type=float, default=1.0)
     parser.add_argument("--reward-lambda-margin", type=float, default=0.2)
     parser.add_argument("--greedy-non-learner", action="store_true")
+    parser.add_argument(
+        "--matchup-sampling",
+        choices=sorted(MATCHUP_SAMPLING_MODES),
+        default="per_episode",
+    )
     parser.add_argument(
         "--output",
         type=Path,
@@ -109,6 +115,7 @@ def main() -> None:
         reward_config=reward_config,
         reinforce_config=reinforce_config,
         greedy_non_learner=args.greedy_non_learner,
+        matchup_sampling=args.matchup_sampling,
     )
     trainer = SelfPlayTrainer(
         learner=learner,
@@ -208,6 +215,7 @@ def checkpoint_to_dict(
             "reward_alpha": args.reward_alpha,
             "reward_lambda_margin": args.reward_lambda_margin,
             "greedy_non_learner": args.greedy_non_learner,
+            "matchup_sampling": args.matchup_sampling,
         },
         "last_stats": stats_to_dict(last_stats) if last_stats is not None else None,
     }
