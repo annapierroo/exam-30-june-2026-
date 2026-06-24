@@ -101,6 +101,15 @@
       display: none;
     }
 
+    .toggle-button {
+      cursor: pointer;
+    }
+
+    .toggle-button.active {
+      background: linear-gradient(#fff2a6, #f2b51e);
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,0.45), 0 2px 4px rgba(0,0,0,0.35);
+    }
+
     .round-button {
       width: 42px;
       min-width: 42px;
@@ -321,6 +330,67 @@
       transform: translateY(-50%);
     }
 
+    .other-hand {
+      position: absolute;
+      display: flex;
+      gap: 5px;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .other-hand.hidden {
+      display: none;
+    }
+
+    .other-hand.p1 {
+      left: 84px;
+      top: calc(50% + 58px);
+      transform: translateY(-50%);
+    }
+
+    .other-hand.p2 {
+      top: 112px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .other-hand.p3 {
+      right: 84px;
+      top: calc(50% + 58px);
+      transform: translateY(-50%);
+    }
+
+    .other-hand .card {
+      width: 42px;
+      height: 60px;
+      padding: 3px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.28);
+    }
+
+    .other-hand .corner {
+      font-size: 9px;
+    }
+
+    .other-hand .pip-grid {
+      font-size: 9px;
+      gap: 0;
+      padding: 0;
+    }
+
+    .other-hand .ace-art {
+      width: 24px;
+      height: 28px;
+      font-size: 18px;
+      border-width: 2px;
+    }
+
+    .other-hand .court-art {
+      width: 27px;
+      height: 30px;
+      font-size: 12px;
+      border-width: 2px;
+    }
+
     .center {
       position: absolute;
       inset: 92px 150px 154px;
@@ -400,8 +470,8 @@
       display: flex;
       justify-content: center;
       align-items: flex-end;
-      gap: 10px;
-      min-height: 120px;
+      gap: 7px;
+      min-height: 104px;
       max-width: min(92vw, 540px);
       z-index: 3;
     }
@@ -415,7 +485,7 @@
 
     .prob {
       min-width: 38px;
-      height: 24px;
+      height: 22px;
       display: grid;
       place-items: center;
       border-radius: 999px;
@@ -433,8 +503,8 @@
     }
 
     .card {
-      width: 72px;
-      height: 104px;
+      width: 64px;
+      height: 94px;
       border-radius: 7px;
       background:
         linear-gradient(135deg, rgba(255,255,255,0.96), rgba(255,246,224,0.96)),
@@ -690,8 +760,8 @@
       }
 
       .card {
-        width: 64px;
-        height: 94px;
+        width: 58px;
+        height: 84px;
       }
 
       .footer {
@@ -723,6 +793,7 @@
       <button class="round-button" id="nextTop" title="Next decision">&rarr;</button>
     </div>
     <div class="actions">
+      <button class="pill toggle-button" id="handsToggle" type="button">Hands off</button>
       <label class="pill file-button">
         Load
         <input id="fileInput" type="file" accept="application/json,.json">
@@ -740,6 +811,9 @@
     <div class="turn-badge turn-left" id="badge1">P1 opponent</div>
     <div class="turn-badge turn-right" id="badge3">P3 opponent</div>
     <div class="turn-badge turn-bottom" id="badge0">P0 learner</div>
+    <div class="other-hand p1 hidden" id="hand1"></div>
+    <div class="other-hand p2 hidden" id="hand2"></div>
+    <div class="other-hand p3 hidden" id="hand3"></div>
 
     <div class="deck-area">
       <div class="deck" id="deckCount">-</div>
@@ -789,11 +863,13 @@
       index: 0,
       ourPlayer: 0,
       learnerHands: [],
+      showAllHands: false,
       fileName: "",
     };
 
     const els = {
       fileInput: document.getElementById("fileInput"),
+      handsToggle: document.getElementById("handsToggle"),
       turnPill: document.getElementById("turnPill"),
       scorePill: document.getElementById("scorePill"),
       prevTop: document.getElementById("prevTop"),
@@ -808,6 +884,11 @@
         document.getElementById("badge2"),
         document.getElementById("badge3"),
       ],
+      otherHands: {
+        1: document.getElementById("hand1"),
+        2: document.getElementById("hand2"),
+        3: document.getElementById("hand3"),
+      },
       deckCount: document.getElementById("deckCount"),
       briscolaCard: document.getElementById("briscolaCard"),
       pariPile: document.getElementById("pariPile"),
@@ -827,6 +908,10 @@
       const file = event.target.files[0];
       if (!file) return;
       loadReport(JSON.parse(await file.text()), file.name);
+    });
+    els.handsToggle.addEventListener("click", () => {
+      state.showAllHands = !state.showAllHands;
+      render();
     });
 
     for (const button of [els.prevTop, els.prevSide]) {
@@ -933,6 +1018,7 @@
       els.finalText.textContent = `Final points: ${ourTeam}=${finalScore[ourTeam]}, ${opponentTeam}=${finalScore[opponentTeam]} | winner=${log.squadra_vincitrice}`;
 
       renderBadges(record);
+      renderOtherHands(record);
       renderCapturePiles();
       renderTrick(record);
       renderLearnerHand(record);
@@ -959,6 +1045,7 @@
         els.badges[player].textContent = `P${player}`;
         els.badges[player].style.background = "rgba(255,255,255,0.92)";
       }
+      renderOtherHands(null);
     }
 
     function setNavigationEnabled(enabled) {
@@ -974,6 +1061,23 @@
         badge.textContent = `P${player} ${roleLabel(player, state.ourPlayer)}`;
         badge.style.background = active ? "#ffd34d" : "rgba(255,255,255,0.92)";
         badge.style.color = "#23160d";
+      }
+    }
+
+    function renderOtherHands(record) {
+      els.handsToggle.textContent = state.showAllHands ? "Hands on" : "Hands off";
+      els.handsToggle.classList.toggle("active", state.showAllHands);
+      for (const [player, container] of Object.entries(els.otherHands)) {
+        container.innerHTML = "";
+        container.classList.toggle("hidden", !state.showAllHands || !record);
+        if (!state.showAllHands || !record) continue;
+
+        const hand = record.mani_by_player?.[player] || [];
+        for (const card of hand) {
+          container.appendChild(cardElement(card, {
+            briscola: card.seme === record.seme_briscola,
+          }));
+        }
       }
     }
 

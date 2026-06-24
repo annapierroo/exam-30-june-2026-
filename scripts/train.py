@@ -16,7 +16,6 @@ if str(PROJECT_ROOT) not in sys.path:
     # Allow `python scripts/train.py` without installing the project as a package.
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from diagnostics import decision_log_to_dict, record_decision_log
 from policy import BriscolaFeatureExtractor, LinearSoftmaxPolicy
 from training import (
     BASELINE_MODES,
@@ -77,19 +76,6 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=PROJECT_ROOT / "experiments/results/train_log.jsonl",
     )
-    parser.add_argument(
-        "--diagnostics-output",
-        type=Path,
-        default=None,
-        help=(
-            "Optional JSON report with one post-training decision trace: "
-            "hand, legal actions, probabilities, chosen card, and public outcome."
-        ),
-    )
-    parser.add_argument("--diagnostics-seed-ambiente", type=int, default=100_000)
-    parser.add_argument("--diagnostics-seed-policy", type=int, default=200_000)
-    parser.add_argument("--diagnostics-primo-giocatore-id", type=int, default=0)
-    parser.add_argument("--diagnostics-stochastic", action="store_true")
     args = parser.parse_args()
     if args.updates <= 0:
         parser.error("--updates deve essere positivo")
@@ -174,9 +160,6 @@ def main() -> None:
     print(f"saved_checkpoint={args.output}")
     print(f"saved_log={args.log}")
 
-    if args.diagnostics_output is not None:
-        write_decision_diagnostics(args=args, learner=learner)
-
 
 def stats_to_dict(stats: SelfPlayStats) -> dict[str, Any]:
     """Convert update metrics into a readable JSONL row."""
@@ -194,45 +177,6 @@ def stats_to_dict(stats: SelfPlayStats) -> dict[str, Any]:
         "pool_size": stats.pool_size,
         "snapshot_added": stats.snapshot_added,
     }
-
-
-def write_decision_diagnostics(
-    *,
-    args: argparse.Namespace,
-    learner: LinearSoftmaxPolicy,
-) -> None:
-    """Record one readable final-policy game for action-level inspection."""
-
-    policies_by_player = {
-        giocatore_id: learner.copy(name=f"{learner.name}_p{giocatore_id}")
-        for giocatore_id in range(4)
-    }
-    log = record_decision_log(
-        policies_by_player=policies_by_player,
-        seed_ambiente=args.diagnostics_seed_ambiente,
-        seed_policy=args.diagnostics_seed_policy,
-        primo_giocatore_id=args.diagnostics_primo_giocatore_id,
-        greedy=not args.diagnostics_stochastic,
-        focus_giocatore_id=args.learner_giocatore_id,
-    )
-    report = {
-        "kind": "briscola_rl_4players_decision_diagnostics",
-        "checkpoint_path": str(args.output),
-        "training_seed": args.seed,
-        "learner_giocatore_id": args.learner_giocatore_id,
-        "policy_assignment": {
-            str(giocatore_id): policy.name
-            for giocatore_id, policy in policies_by_player.items()
-        },
-        "decision_log": decision_log_to_dict(log),
-    }
-
-    args.diagnostics_output.parent.mkdir(parents=True, exist_ok=True)
-    args.diagnostics_output.write_text(
-        json.dumps(report, indent=2),
-        encoding="utf-8",
-    )
-    print(f"saved_diagnostics={args.diagnostics_output}")
 
 
 def checkpoint_to_dict(
