@@ -35,6 +35,7 @@ class DecisionRecord:
     giocatore_id: int
     focus_giocatore_id: int | None
     focus_mano: tuple[Carta, ...]
+    mani_by_player: dict[int, tuple[Carta, ...]]
     policy_name: str
     osservazione: Osservazione
     azioni_legali: tuple[Carta, ...]
@@ -112,6 +113,10 @@ def record_decision_log(
             if focus_giocatore_id is not None
             else ()
         )
+        mani_by_player = {
+            player_id: tuple(mano)
+            for player_id, mano in enumerate(ambiente.mani)
+        }
         esito = ambiente.gioca(azione)
         records.append(
             DecisionRecord(
@@ -119,6 +124,7 @@ def record_decision_log(
                 giocatore_id=giocatore_id,
                 focus_giocatore_id=focus_giocatore_id,
                 focus_mano=focus_mano,
+                mani_by_player=mani_by_player,
                 policy_name=policy.name,
                 osservazione=osservazione,
                 azioni_legali=azioni_legali,
@@ -163,6 +169,10 @@ def _record_to_dict(record: DecisionRecord) -> dict:
         "giocatore_id": record.giocatore_id,
         "focus_giocatore_id": record.focus_giocatore_id,
         "focus_mano": [_card_to_dict(carta) for carta in record.focus_mano],
+        "mani_by_player": {
+            str(player_id): [_card_to_dict(carta) for carta in mano]
+            for player_id, mano in record.mani_by_player.items()
+        },
         "policy_name": record.policy_name,
         "greedy": record.greedy,
         "mano": [_card_to_dict(carta) for carta in osservazione.mano],

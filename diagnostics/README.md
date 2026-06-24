@@ -22,10 +22,12 @@ Utilities for inspecting policy decisions from legal observations.
 
 The log stores public outcomes and legal observations only.
 
-Training can write one post-training decision trace with:
+Record one decision trace from a checkpoint with:
 
 ```bash
-python scripts/train.py ... --diagnostics-output experiments/results/decisions.json
+python scripts/record_diagnostics.py \
+  --checkpoint experiments/results/checkpoint.json \
+  --output experiments/results/decisions.json
 ```
 
 Print it with:

@@ -118,6 +118,8 @@ class TestDecisionLog(unittest.TestCase):
         self.assertEqual(first["mano"], first["osservazione"]["mano"])
         self.assertEqual(first["focus_giocatore_id"], 0)
         self.assertEqual(first["focus_mano"], first["mano"])
+        self.assertEqual(first["mani_by_player"]["0"], first["mano"])
+        self.assertEqual(set(first["mani_by_player"]), {"0", "1", "2", "3"})
         self.assertEqual(first["seme_briscola"], first["osservazione"]["seme_briscola"])
         self.assertEqual(
             first["briscola_esposta"],
