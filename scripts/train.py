@@ -16,6 +16,15 @@ if str(PROJECT_ROOT) not in sys.path:
     # Allow `python scripts/train.py` without installing the project as a package.
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from evaluation import (
+    EvaluationCase,
+    EvaluationMetrics,
+    EvaluationSuite,
+    ScenarioEvaluationResult,
+    default_evaluation_suite,
+    evaluate_suite,
+    make_evaluation_cases,
+)
 from policy import BriscolaFeatureExtractor, LinearSoftmaxPolicy, NeuralSoftmaxPolicy
 from training import (
     BASELINE_MODES,
@@ -91,6 +100,19 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=PROJECT_ROOT / "experiments/results/train_log.jsonl",
     )
+    parser.add_argument("--best-checkpoint-interval", type=int, default=0)
+    parser.add_argument("--best-checkpoint-games", type=int, default=100)
+    parser.add_argument(
+        "--best-checkpoint-seed-ambiente-start",
+        type=int,
+        default=300_000,
+    )
+    parser.add_argument(
+        "--best-checkpoint-seed-policy-start",
+        type=int,
+        default=400_000,
+    )
+    parser.add_argument("--best-checkpoint-output", type=Path, default=None)
     args = parser.parse_args()
     if args.updates <= 0:
         parser.error("--updates deve essere positivo")
@@ -102,6 +124,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("--entropy-coef deve essere non negativo")
     if args.keep_initial_pool and args.drop_initial_pool:
         parser.error("--keep-initial-pool e --drop-initial-pool sono incompatibili")
+    if args.best_checkpoint_interval < 0:
+        parser.error("--best-checkpoint-interval deve essere non negativo")
+    if args.best_checkpoint_games <= 0:
+        parser.error("--best-checkpoint-games deve essere positivo")
     return args
 
 
@@ -150,6 +176,24 @@ def main() -> None:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.log.parent.mkdir(parents=True, exist_ok=True)
+    best_output = default_best_checkpoint_path(args)
+    best_checkpoint_summary: dict[str, Any] | None = None
+    best_checkpoint_score: float | None = None
+    if args.best_checkpoint_interval > 0:
+        if best_output.resolve() == args.output.resolve():
+            raise ValueError(
+                "best checkpoint e final checkpoint devono avere path diverse"
+            )
+        best_output.parent.mkdir(parents=True, exist_ok=True)
+        best_suite = default_evaluation_suite()
+        best_cases = make_evaluation_cases(
+            games=args.best_checkpoint_games,
+            seed_ambiente_start=args.best_checkpoint_seed_ambiente_start,
+            seed_policy_start=args.best_checkpoint_seed_policy_start,
+        )
+    else:
+        best_suite = None
+        best_cases = None
 
     last_stats: SelfPlayStats | None = None
     with args.log.open("w", encoding="utf-8") as log_file:
@@ -157,6 +201,50 @@ def main() -> None:
         for _ in range(args.updates):
             last_stats = trainer.train_update()
             record = stats_to_dict(last_stats)
+            if (
+                args.best_checkpoint_interval > 0
+                and last_stats.update_index % args.best_checkpoint_interval == 0
+            ):
+                if best_suite is None or best_cases is None:
+                    raise RuntimeError("Best-checkpoint evaluation non inizializzata")
+                evaluation_summary = evaluate_for_best_checkpoint(
+                    learner=learner,
+                    args=args,
+                    suite=best_suite,
+                    cases=best_cases,
+                )
+                evaluation_summary["update_index"] = last_stats.update_index
+                score = evaluation_summary["score"]
+                improved = (
+                    best_checkpoint_score is None
+                    or score > best_checkpoint_score
+                )
+                record["best_checkpoint_score"] = score
+                record["best_checkpoint_updated"] = improved
+                record["best_checkpoint_path"] = str(best_output)
+                record["best_checkpoint_scenario_scores"] = {
+                    scenario["name"]: scenario["metrics"]["mean_point_difference"]
+                    for scenario in evaluation_summary["scenarios"]
+                }
+                if improved:
+                    best_checkpoint_score = score
+                    best_checkpoint_summary = evaluation_summary
+                    checkpoint = checkpoint_to_dict(
+                        args=args,
+                        extractor=extractor,
+                        learner=learner,
+                        pool=pool,
+                        trainer=trainer,
+                        last_stats=last_stats,
+                        best_checkpoint_summary=best_checkpoint_summary,
+                        best_checkpoint_path=best_output,
+                    )
+                    checkpoint["best_selection"] = best_checkpoint_summary
+                    best_output.write_text(
+                        json.dumps(checkpoint, indent=2),
+                        encoding="utf-8",
+                    )
+
             log_file.write(json.dumps(record) + "\n")
             message = (
                 "update={update_index} episodes={episodes} "
@@ -165,6 +253,10 @@ def main() -> None:
             )
             if record.get("mean_entropy") is not None:
                 message += " entropy={mean_entropy:.4f}"
+            if record.get("best_checkpoint_score") is not None:
+                message += " best_score={best_checkpoint_score:.2f}"
+                if record.get("best_checkpoint_updated"):
+                    message += " best_updated=1"
             message += " pool={pool_size}"
             print(message.format(**record))
 
@@ -176,9 +268,15 @@ def main() -> None:
         pool=pool,
         trainer=trainer,
         last_stats=last_stats,
+        best_checkpoint_summary=best_checkpoint_summary,
+        best_checkpoint_path=(
+            best_output if best_checkpoint_summary is not None else None
+        ),
     )
     args.output.write_text(json.dumps(checkpoint, indent=2), encoding="utf-8")
     print(f"saved_checkpoint={args.output}")
+    if best_checkpoint_summary is not None:
+        print(f"saved_best_checkpoint={best_output}")
     print(f"saved_log={args.log}")
 
 
@@ -260,6 +358,77 @@ def snapshot_to_dict(snapshot: Any) -> dict[str, Any]:
     return payload
 
 
+def default_best_checkpoint_path(args: argparse.Namespace) -> Path:
+    """Return the external best-checkpoint path used by periodic evaluation."""
+
+    if args.best_checkpoint_output is not None:
+        return args.best_checkpoint_output
+    return args.output.parent / "best_checkpoint.json"
+
+
+def evaluate_for_best_checkpoint(
+    *,
+    learner: LinearSoftmaxPolicy | NeuralSoftmaxPolicy,
+    args: argparse.Namespace,
+    suite: EvaluationSuite,
+    cases: list[EvaluationCase],
+) -> dict[str, Any]:
+    """Evaluate the current learner and build the best-selection summary."""
+
+    results = evaluate_suite(
+        learner_policy=learner,
+        suite=suite,
+        cases=cases,
+        learner_giocatore_id=args.learner_giocatore_id,
+        greedy=True,
+    )
+    score = score_evaluation_results(results)
+    return {
+        "metric": "mean_scenario_margin",
+        "score": score,
+        "update_index": None,
+        "games_per_scenario": args.best_checkpoint_games,
+        "seed_ambiente_start": args.best_checkpoint_seed_ambiente_start,
+        "seed_policy_start": args.best_checkpoint_seed_policy_start,
+        "greedy": True,
+        "scenarios": [
+            {
+                "name": scenario_name,
+                "metrics": metrics_to_dict(result.metrics),
+            }
+            for scenario_name, result in results.items()
+        ],
+    }
+
+
+def score_evaluation_results(
+    results: dict[str, ScenarioEvaluationResult],
+) -> float:
+    """Score one evaluation suite by averaging scenario mean margins."""
+
+    if not results:
+        raise ValueError("Serve almeno uno scenario per selezionare il best checkpoint")
+    margins = [
+        result.metrics.mean_point_difference
+        for result in results.values()
+    ]
+    return float(sum(margins) / len(margins))
+
+
+def metrics_to_dict(metrics: EvaluationMetrics) -> dict[str, Any]:
+    """Serialize aggregate metrics without including individual games."""
+
+    return {
+        "games": metrics.games,
+        "win_rate": metrics.win_rate,
+        "draw_rate": metrics.draw_rate,
+        "loss_rate": metrics.loss_rate,
+        "mean_point_difference": metrics.mean_point_difference,
+        "standard_error": metrics.standard_error,
+        "confidence_interval_95": list(metrics.confidence_interval_95),
+    }
+
+
 def checkpoint_to_dict(
     *,
     args: argparse.Namespace,
@@ -268,10 +437,12 @@ def checkpoint_to_dict(
     pool: SnapshotPool,
     trainer: SelfPlayTrainer,
     last_stats: SelfPlayStats | None,
+    best_checkpoint_summary: dict[str, Any] | None = None,
+    best_checkpoint_path: Path | None = None,
 ) -> dict[str, Any]:
     """Build the final checkpoint with learner, pool, and configuration."""
 
-    return {
+    checkpoint = {
         "kind": "briscola_rl_4players_training_checkpoint",
         "update_index": trainer.update_index,
         "seed": args.seed,
@@ -298,9 +469,30 @@ def checkpoint_to_dict(
             "reward_lambda_margin": args.reward_lambda_margin,
             "greedy_non_learner": args.greedy_non_learner,
             "matchup_sampling": args.matchup_sampling,
+            "best_checkpoint_interval": args.best_checkpoint_interval,
+            "best_checkpoint_games": args.best_checkpoint_games,
+            "best_checkpoint_seed_ambiente_start": (
+                args.best_checkpoint_seed_ambiente_start
+            ),
+            "best_checkpoint_seed_policy_start": (
+                args.best_checkpoint_seed_policy_start
+            ),
+            "best_checkpoint_output": (
+                str(default_best_checkpoint_path(args))
+                if args.best_checkpoint_interval > 0
+                else None
+            ),
         },
         "last_stats": stats_to_dict(last_stats) if last_stats is not None else None,
     }
+    if best_checkpoint_summary is not None:
+        checkpoint["best_checkpoint"] = {
+            "path": str(best_checkpoint_path),
+            "metric": best_checkpoint_summary["metric"],
+            "score": best_checkpoint_summary["score"],
+            "update_index": best_checkpoint_summary["update_index"],
+        }
+    return checkpoint
 
 
 if __name__ == "__main__":
