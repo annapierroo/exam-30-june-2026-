@@ -7,6 +7,7 @@ from .episode import (
     TrajectoryStep,
     collect_episode,
 )
+from .bootstrap import BootstrapPolicySchedule
 from .pool import Snapshot, SnapshotPool
 from .reinforce import (
     BASELINE_MODES,
@@ -39,6 +40,7 @@ __all__ = [
     "BASELINE_MODES",
     "MATCHUP_SAMPLING_MODES",
     "REWARD_MODES",
+    "BootstrapPolicySchedule",
     "EpisodeResult",
     "MatchupSamplingMode",
     "ReinforceConfig",

@@ -9,6 +9,7 @@ from typing import Literal
 from game.rules import NUMERO_GIOCATORI, valida_giocatore_id
 from policy import LinearSoftmaxPolicy, Policy
 
+from .bootstrap import BootstrapPolicySchedule
 from .episode import EpisodeResult, collect_episode
 from .pool import SnapshotPool
 from .reinforce import ReinforceConfig, TrainStats, reinforce_update
@@ -37,6 +38,9 @@ class SelfPlayConfig:
     learner_giocatore_id: int = 0
     reward_config: RewardConfig = field(default_factory=RewardConfig)
     reinforce_config: ReinforceConfig = field(default_factory=ReinforceConfig)
+    bootstrap_schedule: BootstrapPolicySchedule = field(
+        default_factory=BootstrapPolicySchedule
+    )
     greedy_non_learner: bool = False
     matchup_sampling: MatchupSamplingMode = "per_episode"
 
@@ -144,9 +148,9 @@ class SelfPlayTrainer:
 
     def _sample_matchup(self) -> PolicyMatchup:
         return PolicyMatchup(
-            compagno_policy=self.pool.sample_policy(self.master_rng),
-            avversario_successivo_policy=self.pool.sample_policy(self.master_rng),
-            avversario_precedente_policy=self.pool.sample_policy(self.master_rng),
+            compagno_policy=self._sample_non_learner_policy(),
+            avversario_successivo_policy=self._sample_non_learner_policy(),
+            avversario_precedente_policy=self._sample_non_learner_policy(),
         )
 
     def _collect_training_episode(
@@ -172,3 +176,8 @@ class SelfPlayTrainer:
             reward_config=self.config.reward_config,
             greedy_non_learner=self.config.greedy_non_learner,
         )
+
+    def _sample_non_learner_policy(self) -> Policy:
+        if self.config.bootstrap_schedule.active(self.update_index):
+            return self.config.bootstrap_schedule.sample_policy(self.master_rng)
+        return self.pool.sample_policy(self.master_rng)
