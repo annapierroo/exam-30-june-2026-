@@ -201,9 +201,9 @@ def main() -> None:
         for _ in range(args.updates):
             last_stats = trainer.train_update()
             record = stats_to_dict(last_stats)
-            if (
-                args.best_checkpoint_interval > 0
-                and last_stats.update_index % args.best_checkpoint_interval == 0
+            if should_evaluate_best_checkpoint(
+                update_index=last_stats.update_index,
+                args=args,
             ):
                 if best_suite is None or best_cases is None:
                     raise RuntimeError("Best-checkpoint evaluation non inizializzata")
@@ -364,6 +364,21 @@ def default_best_checkpoint_path(args: argparse.Namespace) -> Path:
     if args.best_checkpoint_output is not None:
         return args.best_checkpoint_output
     return args.output.parent / "best_checkpoint.json"
+
+
+def should_evaluate_best_checkpoint(
+    *,
+    update_index: int,
+    args: argparse.Namespace,
+) -> bool:
+    """Evaluate periodically and always include the final trained learner."""
+
+    if args.best_checkpoint_interval <= 0:
+        return False
+    return (
+        update_index % args.best_checkpoint_interval == 0
+        or update_index == args.updates
+    )
 
 
 def evaluate_for_best_checkpoint(
