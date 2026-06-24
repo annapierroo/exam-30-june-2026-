@@ -214,7 +214,26 @@ class PerfectHeuristicPolicy:
         lisci = [c for c in azioni if self._is_liscio(c, sb)]
         if res := self._select(lisci, "-"): return res
 
+        punticini_p = [c for c in azioni if self._is_punticino(c, sb) and self._prende(o, c)]
+        if res := self._select(punticini_p, "-"): return res
+
+        punticini_np = [c for c in azioni if self._is_punticino(c, sb) and self._non_prende(o, c)]
+        if res := self._select(punticini_np, "-"): return res
+
+        taglietti = [c for c in azioni if self._is_taglietto(c, sb)]
+        if res := self._select(taglietti, "-"): return res
+
+        carichi_p = [c for c in azioni if self._is_carico(c, sb) and self._prende(o, c)]
+        if res := self._select(carichi_p, "-"): return res
+
+        ba = [c for c in azioni if self._is_briscola_alta(c, sb)]
+        if res := self._select(ba, "-"): return res
+
+        carichi_np = [c for c in azioni if self._is_carico(c, sb) and self._non_prende(o, c)]
+        if res := self._select(carichi_np, "-"): return res
+
         return self._select(azioni, "-")
+
 
     def _caso_4(self, o: Osservazione, azioni: list[Carta]) -> list[Carta]:
         sb = o.seme_briscola
