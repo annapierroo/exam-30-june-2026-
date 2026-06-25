@@ -55,6 +55,7 @@ class RunConfig:
     init_scale: str = "0.01"
     max_update_norm: str | None = None
     hidden_size: int | None = None
+    neural_learned_baseline: bool = True
 
 
 def value_token(value: str | int) -> str:
@@ -79,8 +80,13 @@ def run_directory(config: RunConfig) -> Path:
     if config.policy_type == "neural":
         if config.hidden_size is None:
             raise ValueError("Neural runs require hidden_size")
+        baseline_token = (
+            "learned_value_baseline"
+            if config.neural_learned_baseline
+            else "simple_reinforce_baseline"
+        )
         directory = directory / (
-            f"policy_neural_hidden_size_{config.hidden_size}"
+            f"policy_neural_hidden_size_{config.hidden_size}_{baseline_token}"
         )
     return (
         directory
@@ -147,6 +153,10 @@ def train_command(config: RunConfig, python_bin: str) -> list[str]:
         if config.hidden_size is None:
             raise ValueError("Neural runs require hidden_size")
         command.extend(["--hidden-size", str(config.hidden_size)])
+        if config.neural_learned_baseline:
+            command.append("--neural-learned-baseline")
+        else:
+            command.append("--no-neural-learned-baseline")
     if config.max_update_norm is not None:
         command.extend(["--max-update-norm", config.max_update_norm])
     return command
