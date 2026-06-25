@@ -5,6 +5,8 @@ Utilities for inspecting policy decisions from legal observations.
 ## Files
 
 - `decision_log.py`: records one complete game as a sequence of decisions.
+- `neural_interactions.py`: estimates local feature and pairwise interaction
+  sensitivities for neural checkpoints.
 - `views.py`: filters decision logs into readable subsets.
 
 ## Decision Log
@@ -43,6 +45,28 @@ diagnostics_ui/visual_diagnostics.html
 ```
 
 Then load `experiments/results/decisions.json` with the file picker.
+
+## Neural Interactions
+
+`scripts/analyze_neural_interactions.py` loads a neural checkpoint, replays the
+fixed evaluation suite, and measures:
+
+- feature sensitivity: mean absolute local gradient of the neural logit;
+- pair interaction sensitivity: mean absolute local cross-partial derivative of
+  the neural logit for selected feature pairs.
+
+Run it with:
+
+```bash
+python scripts/analyze_neural_interactions.py \
+  --checkpoint experiments/results/checkpoint.json \
+  --games 100 \
+  --output experiments/results/neural_interactions.json
+```
+
+The report explains local neural logits, not causal game outcomes. Engineered
+interaction features such as `briscola_x_punti_presa` appear as ordinary input
+features in the feature-sensitivity table.
 
 ## Views
 
