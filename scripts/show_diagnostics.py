@@ -50,6 +50,13 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     report = load_report(args.diagnostics)
+    if is_neural_interaction_report(report):
+        print_neural_interaction_report(report, limit=args.limit)
+        return
+
+    if not is_decision_diagnostics_report(report):
+        raise ValueError("Report diagnostico non riconosciuto")
+
     decision_log = report["decision_log"]
     our_player = args.our_player
     if our_player is None:
@@ -75,6 +82,14 @@ def load_report(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(path)
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def is_decision_diagnostics_report(report: dict[str, Any]) -> bool:
+    return "decision_log" in report
+
+
+def is_neural_interaction_report(report: dict[str, Any]) -> bool:
+    return "top_features" in report and "top_interactions" in report
 
 
 def filtered_records(
@@ -197,6 +212,139 @@ def print_final_points(decision_log: dict[str, Any]) -> None:
     print("Final points")
     print(f"  {format_score(decision_log['punteggi_finali'])}")
     print(f"  winner={decision_log['squadra_vincitrice']}")
+
+
+def print_neural_interaction_report(
+    report: dict[str, Any],
+    *,
+    limit: int | None,
+) -> None:
+    top_features = report["top_features"]
+    top_interactions = report["top_interactions"]
+    if limit is not None:
+        top_features = top_features[:limit]
+        top_interactions = top_interactions[:limit]
+
+    print("Neural interaction diagnostics")
+    print(f"  checkpoint: {report.get('checkpoint_path', '-')}")
+    print(f"  update index: {report.get('checkpoint_update_index', '-')}")
+    print(f"  games per scenario: {report.get('games_per_scenario', '-')}")
+    print(f"  greedy: {report.get('greedy', '-')}")
+    print(f"  chosen only: {report.get('chosen_only', '-')}")
+    print(f"  samples: {report.get('sample_count', '-')}")
+    interaction_config = report.get("interaction_config", {})
+    if interaction_config:
+        print(
+            "  max interaction order: "
+            f"{interaction_config.get('max_evaluated_order', interaction_config.get('max_order', '-'))}"
+        )
+        print(f"  max nonzero order: {interaction_config.get('max_nonzero_order', '-')}")
+        print(f"  candidate interactions: {interaction_config.get('candidate_count', '-')}")
+        print(
+            "  evaluated interactions: "
+            f"{interaction_config.get('evaluated_interaction_count', '-')}"
+        )
+        order_counts = interaction_config.get("candidate_order_counts", {})
+        if order_counts:
+            print(
+                "  candidate orders: "
+                + ", ".join(
+                    f"{order}:{count}"
+                    for order, count in sorted(
+                        order_counts.items(),
+                        key=lambda item: int(item[0]),
+                    )
+                )
+            )
+    print()
+
+    samples_by_scenario = report.get("samples_by_scenario", {})
+    if samples_by_scenario:
+        print("Samples by scenario")
+        for scenario_name, count in samples_by_scenario.items():
+            print(f"  {scenario_name}: {count}")
+        print()
+
+    notes = report.get("metric_notes", {})
+    if notes:
+        print("Metric notes")
+        for name, note in notes.items():
+            print(f"  {name}: {note}")
+        print()
+
+    print("Top feature sensitivities")
+    print(f"{'feature':42} {'strength':>12} {'mean_abs_grad':>14} {'std':>9}")
+    for row in top_features:
+        print(
+            f"{row['feature']:42} "
+            f"{row['weighted_strength']:12.6f} "
+            f"{row['mean_abs_gradient']:14.6f} "
+            f"{row['feature_std']:9.4f}"
+        )
+    print()
+
+    print("Top interactions")
+    print(
+        f"{'features':74} {'order':>5} "
+        f"{'strength':>12} {'mean_abs_partial':>16}"
+    )
+    for row in top_interactions:
+        features = interaction_features(row)
+        print(
+            f"{' x '.join(features):74} "
+            f"{len(features):5d} "
+            f"{row['weighted_strength']:12.6f} "
+            f"{interaction_partial_value(row):16.6f}"
+        )
+    print()
+
+    print_interactions_by_order(report, limit=limit)
+
+
+def print_interactions_by_order(
+    report: dict[str, Any],
+    *,
+    limit: int | None,
+) -> None:
+    rows_by_order = report.get("top_interactions_by_order")
+    if not rows_by_order:
+        rows_by_order = group_interactions_by_order(report.get("all_interactions", []))
+    if not rows_by_order:
+        return
+
+    print("Top interactions by order")
+    for order, rows in sorted(rows_by_order.items(), key=lambda item: int(item[0])):
+        selected_rows = rows[:limit] if limit is not None else rows
+        print(f"\nOrder {order}")
+        print(
+            f"{'features':74} {'strength':>12} {'mean_abs_partial':>16}"
+        )
+        for row in selected_rows:
+            print(
+                f"{' x '.join(interaction_features(row)):74} "
+                f"{row['weighted_strength']:12.6f} "
+                f"{interaction_partial_value(row):16.6f}"
+            )
+
+
+def group_interactions_by_order(
+    rows: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        order = str(row.get("order", len(interaction_features(row))))
+        grouped.setdefault(order, []).append(row)
+    return grouped
+
+
+def interaction_features(row: dict[str, Any]) -> list[str]:
+    if "features" in row:
+        return list(row["features"])
+    return [row["feature_a"], row["feature_b"]]
+
+
+def interaction_partial_value(row: dict[str, Any]) -> float:
+    return row.get("mean_abs_partial", row.get("mean_abs_cross_partial", 0.0))
 
 
 def decision_owner_label(record: dict[str, Any], our_player: int | None) -> str:

@@ -2,7 +2,11 @@
 
 Open `visual_diagnostics.html` and load a diagnostics JSON file.
 
-The UI expects the diagnostics JSON produced by `scripts/record_diagnostics.py`.
+The UI accepts:
+
+- decision logs produced by `scripts/record_diagnostics.py`;
+- neural interaction reports produced by `scripts/analyze_neural_interactions.py`.
+
 Use `Hands on` to reveal every player's hand during debugging.
 
 Start a local server from the project root:
@@ -47,6 +51,28 @@ Open:
 ```text
 http://127.0.0.1:8765/diagnostics_ui/visual_diagnostics.html?json=/experiments/results/diagnostics_vs_perfect.json
 ```
+
+## Neural Interaction Report
+
+Generate an aggregate neural interaction report:
+
+```bash
+.venv/bin/python scripts/analyze_neural_interactions.py \
+  --checkpoint experiments/results/checkpoint.json \
+  --games 100 \
+  --output experiments/results/neural_interactions_games_100.json
+```
+
+Open:
+
+```text
+http://127.0.0.1:8765/diagnostics_ui/visual_diagnostics.html?json=/experiments/results/neural_interactions_games_100.json
+```
+
+This view shows aggregate feature sensitivities and mixed interactions for the
+neural logits. It includes a global interaction table and separate tables for
+each interaction order available in the report. It does not replace the
+decision-log view for individual games.
 
 ## Available Policies
 

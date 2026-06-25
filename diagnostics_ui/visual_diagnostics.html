@@ -732,6 +732,136 @@
       text-align: center;
     }
 
+    .interaction-report {
+      position: absolute;
+      inset: 24px 24px 92px;
+      z-index: 6;
+      overflow: auto;
+      padding: 18px;
+      border: 2px solid rgba(255, 211, 77, 0.62);
+      border-radius: 8px;
+      background: rgba(7, 53, 33, 0.96);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.32);
+      color: white;
+    }
+
+    .interaction-report.hidden {
+      display: none;
+    }
+
+    .report-mode .nav-arrow,
+    .report-mode .turn-badge,
+    .report-mode .other-hand,
+    .report-mode .deck-area,
+    .report-mode .capture-piles,
+    .report-mode .center,
+    .report-mode .learner-hand {
+      display: none;
+    }
+
+    .report-heading {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .report-heading h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.1;
+    }
+
+    .report-heading p {
+      margin: 0;
+      max-width: 880px;
+      color: rgba(255,255,255,0.78);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .report-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      margin: 12px 0 18px;
+    }
+
+    .summary-item {
+      min-height: 58px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+    }
+
+    .summary-item span {
+      display: block;
+      color: rgba(255,255,255,0.68);
+      font-size: 11px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .summary-item strong {
+      display: block;
+      margin-top: 4px;
+      color: var(--gold);
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .report-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .report-section h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 12px;
+      background: rgba(0,0,0,0.12);
+    }
+
+    .report-table th,
+    .report-table td {
+      padding: 8px 7px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+
+    .report-table th {
+      color: rgba(255,255,255,0.76);
+      font-size: 11px;
+      text-transform: uppercase;
+      background: rgba(0,0,0,0.18);
+    }
+
+    .report-table td.numeric,
+    .report-table th.numeric {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .report-notes {
+      margin-top: 16px;
+      display: grid;
+      gap: 6px;
+      color: rgba(255,255,255,0.72);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
     @media (max-width: 760px) {
       body {
         overflow: auto;
@@ -805,6 +935,17 @@
       .step-range {
         width: calc(100vw - 28px);
       }
+
+      .interaction-report {
+        position: relative;
+        inset: auto;
+        margin: 12px;
+        max-height: none;
+      }
+
+      .report-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -835,7 +976,7 @@
     </div>
   </header>
 
-  <main class="table">
+  <main class="table" id="table">
     <button class="nav-arrow prev" id="prevSide" title="Previous decision">&lsaquo;</button>
     <button class="nav-arrow next" id="nextSide" title="Next decision">&rsaquo;</button>
 
@@ -877,6 +1018,8 @@
       <div class="empty">Load a diagnostics JSON.</div>
     </section>
 
+    <section class="interaction-report hidden" id="interactionReport"></section>
+
     <footer class="footer">
       <div class="footer-left" id="metaText">No file loaded</div>
       <div class="opponent-policies" id="policyLine">Partner: - | Opponents: -</div>
@@ -897,10 +1040,12 @@
       learnerHands: [],
       showAllHands: false,
       fileName: "",
+      reportKind: "empty",
     };
 
     const els = {
       fileInput: document.getElementById("fileInput"),
+      table: document.getElementById("table"),
       handsToggle: document.getElementById("handsToggle"),
       turnPill: document.getElementById("turnPill"),
       teamScoreValue: document.getElementById("teamScoreValue"),
@@ -928,6 +1073,7 @@
       dispariPileCount: document.getElementById("dispariPileCount"),
       trick: document.getElementById("trick"),
       learnerHand: document.getElementById("learnerHand"),
+      interactionReport: document.getElementById("interactionReport"),
       metaText: document.getElementById("metaText"),
       policyLine: document.getElementById("policyLine"),
       stepRange: document.getElementById("stepRange"),
@@ -976,17 +1122,48 @@
     }
 
     function loadReport(report, fileName) {
-      if (!report.decision_log || !Array.isArray(report.decision_log.records)) {
-        throw new Error("Invalid diagnostics file");
+      if (isDecisionDiagnosticsReport(report)) {
+        loadDecisionReport(report, fileName);
+        return;
       }
+      if (isNeuralInteractionReport(report)) {
+        loadInteractionReport(report, fileName);
+        return;
+      }
+      throw new Error("Invalid diagnostics file");
+    }
+
+    function isDecisionDiagnosticsReport(report) {
+      return Boolean(report?.decision_log && Array.isArray(report.decision_log.records));
+    }
+
+    function isNeuralInteractionReport(report) {
+      return Array.isArray(report?.top_features) && Array.isArray(report?.top_interactions);
+    }
+
+    function loadDecisionReport(report, fileName) {
       state.report = report;
       state.records = report.decision_log.records;
       state.index = 0;
       state.ourPlayer = report.learner_giocatore_id ?? 0;
       state.fileName = fileName;
+      state.reportKind = "decision";
       state.learnerHands = buildLearnerHands(state.records, state.ourPlayer);
       els.stepRange.max = Math.max(0, state.records.length - 1);
       els.stepRange.disabled = state.records.length === 0;
+      render();
+    }
+
+    function loadInteractionReport(report, fileName) {
+      state.report = report;
+      state.records = [];
+      state.index = 0;
+      state.ourPlayer = 0;
+      state.fileName = fileName;
+      state.reportKind = "interactions";
+      state.learnerHands = [];
+      els.stepRange.max = 0;
+      els.stepRange.disabled = true;
       render();
     }
 
@@ -1014,13 +1191,19 @@
     }
 
     function move(delta) {
-      if (!state.records.length) return;
+      if (state.reportKind !== "decision" || !state.records.length) return;
       state.index = Math.min(state.records.length - 1, Math.max(0, state.index + delta));
       render();
     }
 
     function render() {
+      if (state.reportKind === "interactions") {
+        renderInteractionReport();
+        return;
+      }
       const loaded = state.records.length > 0;
+      els.table.classList.remove("report-mode");
+      els.interactionReport.classList.add("hidden");
       setNavigationEnabled(loaded);
       if (!loaded) {
         renderEmpty();
@@ -1056,6 +1239,9 @@
     }
 
     function renderEmpty() {
+      state.reportKind = "empty";
+      els.table.classList.remove("report-mode");
+      els.interactionReport.classList.add("hidden");
       els.turnPill.textContent = "Load JSON";
       els.teamScoreValue.textContent = "0";
       els.opponentScoreValue.textContent = "0";
@@ -1082,6 +1268,231 @@
       for (const button of [els.prevTop, els.nextTop, els.prevSide, els.nextSide]) {
         button.disabled = !enabled;
       }
+    }
+
+    function renderInteractionReport() {
+      const report = state.report;
+      els.table.classList.add("report-mode");
+      els.interactionReport.classList.remove("hidden");
+      setNavigationEnabled(false);
+      els.handsToggle.textContent = "Hands off";
+      els.handsToggle.classList.remove("active");
+      els.turnPill.textContent = "Neural report";
+      els.teamScoreValue.textContent = report.sample_count ?? 0;
+      els.opponentScoreValue.textContent = report.games_per_scenario ?? "-";
+      els.metaText.textContent = `${state.fileName} | neural interactions`;
+      els.policyLine.textContent = `Checkpoint: ${report.checkpoint_path || "-"}`;
+      els.stepText.textContent = "Aggregate report";
+      els.finalText.textContent = `Update ${report.checkpoint_update_index ?? "-"} | greedy=${report.greedy ?? "-"}`;
+      els.interactionReport.innerHTML = interactionReportHtml(report);
+    }
+
+    function interactionReportHtml(report) {
+      const notes = report.metric_notes || {};
+      return `
+        <div class="report-heading">
+          <h1>Neural interaction diagnostics</h1>
+          <p>${escapeHtml(notes.logit_scope || "Scores explain local neural logits, not causal game outcomes.")}</p>
+        </div>
+        <div class="report-summary">
+          ${summaryItem("Samples", report.sample_count)}
+          ${summaryItem("Games/scenario", report.games_per_scenario)}
+          ${summaryItem("Update", report.checkpoint_update_index)}
+          ${summaryItem("Max order", report.interaction_config?.max_evaluated_order ?? report.interaction_config?.max_order)}
+          ${summaryItem("Max nonzero", report.interaction_config?.max_nonzero_order)}
+          ${summaryItem("Candidates", report.interaction_config?.candidate_count)}
+          ${summaryItem("Evaluated", report.interaction_config?.evaluated_interaction_count)}
+          ${summaryItem("Greedy", report.greedy)}
+          ${summaryItem("Chosen only", report.chosen_only)}
+        </div>
+        ${samplesByScenarioHtml(report.samples_by_scenario || {})}
+        ${interactionOrderSummaryHtml(report)}
+        <div class="report-grid">
+          <section class="report-section">
+            <h2>Top feature sensitivities</h2>
+            ${featureTableHtml(report.top_features || [])}
+          </section>
+          <section class="report-section">
+            <h2>Top interactions</h2>
+            ${interactionTableHtml(report.top_interactions || [])}
+          </section>
+        </div>
+        ${interactionsByOrderHtml(report)}
+        ${metricNotesHtml(notes)}
+      `;
+    }
+
+    function summaryItem(label, value) {
+      return `
+        <div class="summary-item">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(formatValue(value))}</strong>
+        </div>
+      `;
+    }
+
+    function samplesByScenarioHtml(samplesByScenario) {
+      const rows = Object.entries(samplesByScenario);
+      if (!rows.length) return "";
+      return `
+        <section class="report-section">
+          <h2>Samples by scenario</h2>
+          <table class="report-table">
+            <thead>
+              <tr><th>Scenario</th><th class="numeric">Samples</th></tr>
+            </thead>
+            <tbody>
+              ${rows.map(([scenario, count]) => `
+                <tr>
+                  <td>${escapeHtml(scenario)}</td>
+                  <td class="numeric">${escapeHtml(count)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </section>
+        <br>
+      `;
+    }
+
+    function featureTableHtml(rows) {
+      if (!rows.length) return '<div class="empty">No feature rows.</div>';
+      return `
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th class="numeric">Strength</th>
+              <th class="numeric">Mean |grad|</th>
+              <th class="numeric">Std</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => `
+              <tr>
+                <td>${escapeHtml(row.feature)}</td>
+                <td class="numeric">${formatNumber(row.weighted_strength)}</td>
+                <td class="numeric">${formatNumber(row.mean_abs_gradient)}</td>
+                <td class="numeric">${formatNumber(row.feature_std)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function interactionTableHtml(rows) {
+      if (!rows.length) return '<div class="empty">No interaction rows.</div>';
+      return `
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Features</th>
+              <th class="numeric">Order</th>
+              <th class="numeric">Strength</th>
+              <th class="numeric">Mean |partial|</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => `
+              <tr>
+                <td>${escapeHtml(interactionFeatures(row).join(" x "))}</td>
+                <td class="numeric">${interactionFeatures(row).length}</td>
+                <td class="numeric">${formatNumber(row.weighted_strength)}</td>
+                <td class="numeric">${formatNumber(interactionPartialValue(row))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function interactionOrderSummaryHtml(report) {
+      const summary = report.interaction_order_summary || {};
+      const candidateCounts = report.interaction_config?.candidate_order_counts || {};
+      const orders = Array.from(new Set([
+        ...Object.keys(candidateCounts),
+        ...Object.keys(summary),
+      ])).sort((a, b) => Number(a) - Number(b));
+      if (!orders.length) return "";
+      return `
+        <section class="report-section">
+          <h2>Interaction orders</h2>
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th class="numeric">Candidates</th>
+                <th class="numeric">Nonzero</th>
+                <th class="numeric">Max strength</th>
+                <th class="numeric">Max |partial|</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${orders.map((order) => {
+                const row = summary[order] || {};
+                return `
+                  <tr>
+                    <td>${escapeHtml(order)}</td>
+                    <td class="numeric">${escapeHtml(candidateCounts[order] ?? row.candidate_count ?? "-")}</td>
+                    <td class="numeric">${escapeHtml(row.nonzero_mean_abs_partial_count ?? "-")}</td>
+                    <td class="numeric">${formatNumber(row.max_weighted_strength)}</td>
+                    <td class="numeric">${formatNumber(row.max_mean_abs_partial)}</td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        </section>
+        <br>
+      `;
+    }
+
+    function interactionsByOrderHtml(report) {
+      const rowsByOrder = report.top_interactions_by_order || groupInteractionsByOrder(report.all_interactions || []);
+      const orders = Object.keys(rowsByOrder).sort((a, b) => Number(a) - Number(b));
+      if (!orders.length) return "";
+      return `
+        <section class="report-section">
+          <h2>Top interactions by order</h2>
+          ${orders.map((order) => `
+            <h3>Order ${escapeHtml(order)}</h3>
+            ${interactionTableHtml(rowsByOrder[order] || [])}
+          `).join("")}
+        </section>
+        <br>
+      `;
+    }
+
+    function groupInteractionsByOrder(rows) {
+      const grouped = {};
+      rows.forEach((row) => {
+        const order = String(row.order || interactionFeatures(row).length);
+        if (!grouped[order]) grouped[order] = [];
+        grouped[order].push(row);
+      });
+      return grouped;
+    }
+
+    function interactionFeatures(row) {
+      if (Array.isArray(row.features)) return row.features;
+      return [row.feature_a, row.feature_b].filter(Boolean);
+    }
+
+    function interactionPartialValue(row) {
+      return row.mean_abs_partial ?? row.mean_abs_cross_partial ?? 0;
+    }
+
+    function metricNotesHtml(notes) {
+      const rows = Object.entries(notes).filter(([name]) => name !== "logit_scope");
+      if (!rows.length) return "";
+      return `
+        <div class="report-notes">
+          ${rows.map(([name, note]) => `
+            <div><strong>${escapeHtml(name)}:</strong> ${escapeHtml(note)}</div>
+          `).join("")}
+        </div>
+      `;
     }
 
     function renderBadges(record) {
@@ -1303,6 +1714,20 @@
 
     function cardColor(card) {
       return card.seme === "coppe" || card.seme === "denari" ? "red" : "black";
+    }
+
+    function formatNumber(value) {
+      if (value == null || Number.isNaN(Number(value))) return "-";
+      return Number(value).toFixed(6);
+    }
+
+    function formatValue(value) {
+      if (value == null) return "-";
+      if (typeof value === "boolean") return value ? "true" : "false";
+      if (typeof value === "number") {
+        return Number.isInteger(value) ? String(value) : value.toFixed(3);
+      }
+      return value;
     }
 
     function escapeHtml(value) {
