@@ -98,7 +98,6 @@ DEFAULT_FEATURE_NAMES: tuple[str, ...] = (
     "carta_prende_x_tavolo_ha_briscola_alta",
     "carta_prende_x_tavolo_ha_taglietto",
     "carta_briscola_x_carta_prende_x_tavolo_ha_carico",
-    "carta_liscia_x_carta_prende_x_tavolo_ha_briscola_alta",
     "ultime_quattro_prese_x_carta_prende_x_tavolo_ha_briscola_alta",
     "differenza_punteggio_x_carta_prende",
     "differenza_punteggio_x_carta_carico_non_briscola",
@@ -179,7 +178,6 @@ class NewFeatureSetExtractor:
         presa_povera = punti_presa_corrente <= 4
         presa_media = 5 <= punti_presa_corrente <= 10
         presa_ricca = punti_presa_corrente > 10
-        presa_molto_ricca = punti_presa_corrente >= 15
         fase_iniziale = osservazione.indice_presa <= 2
         fase_finale = osservazione.indice_presa >= 7
         ultime_quattro_prese = osservazione.indice_presa >= 6
@@ -206,8 +204,6 @@ class NewFeatureSetExtractor:
             osservazione,
             carta_vincente_tavolo,
         )
-        tavolo_ha_liscio = self._liscio(osservazione, carta_vincente_tavolo)
-        tavolo_ha_punticino = self._punticino(osservazione, carta_vincente_tavolo)
         tavolo_ha_taglietto = self._taglietto(osservazione, carta_vincente_tavolo)
         tavolo_ha_briscola_alta = self._briscola_alta(
             osservazione,
@@ -437,11 +433,6 @@ class NewFeatureSetExtractor:
             * float(tavolo_ha_taglietto),
             "carta_briscola_x_carta_prende_x_tavolo_ha_carico": (
                 float(carta_briscola) * float(carta_prende) * float(tavolo_ha_carico)
-            ),
-            "carta_liscia_x_carta_prende_x_tavolo_ha_briscola_alta": (
-                float(carta_liscia)
-                * float(carta_prende)
-                * float(tavolo_ha_briscola_alta)
             ),
             "ultime_quattro_prese_x_carta_prende_x_tavolo_ha_briscola_alta": (
                 float(ultime_quattro_prese)

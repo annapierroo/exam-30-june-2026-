@@ -66,6 +66,10 @@ class TestNewFeatureSetExtractor(unittest.TestCase):
 
         self.assertEqual(len(values), extractor.size())
         self.assertNotIn("carta_rischiosa", extractor.feature_names)
+        self.assertNotIn(
+            "carta_liscia_x_carta_prende_x_tavolo_ha_briscola_alta",
+            extractor.feature_names,
+        )
         self.assertTrue(all(isinstance(value, float) for value in values))
 
     def test_categorie_carta_separano_carico_non_briscola_e_briscole(self):

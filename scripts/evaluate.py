@@ -22,7 +22,7 @@ from evaluation import (
     evaluate_suite,
     make_evaluation_cases,
 )
-from policy import BriscolaFeatureExtractor, LinearSoftmaxPolicy, NeuralSoftmaxPolicy
+from policy import LinearSoftmaxPolicy, NeuralSoftmaxPolicy, build_feature_extractor
 
 
 def parse_args() -> argparse.Namespace:
@@ -99,7 +99,8 @@ def learner_from_checkpoint(
 ) -> LinearSoftmaxPolicy | NeuralSoftmaxPolicy:
     """Rebuild the final learner saved in the checkpoint."""
 
-    extractor = BriscolaFeatureExtractor()
+    feature_set = checkpoint.get("config", {}).get("feature_set", "base")
+    extractor = build_feature_extractor(feature_set)
     saved_features = checkpoint.get("feature_names")
     if saved_features != list(extractor.feature_names):
         raise ValueError("Le feature del checkpoint non corrispondono all'estrattore")

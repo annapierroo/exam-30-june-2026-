@@ -23,6 +23,7 @@ STRESS_LEARNING_RATES = ("0.1", "0.3", "0.9")
 CLIPPING_PROBE_NORMS: tuple[str | None, ...] = (None, "1.0", "5.0")
 BOOTSTRAP_UPDATES = (0, 30)
 MATCHUP_SAMPLINGS = ("per_episode", "per_rotation_block")
+FEATURE_SETS = ("base", "new_interactions")
 
 REWARD_PRESETS = {
     "win_heavy": ("1.0", "0.1"),
@@ -45,6 +46,7 @@ class RunConfig:
     reward_mode: str
     reward_alpha: str
     reward_lambda_margin: str
+    feature_set: str = "base"
     baseline: str = "time_dependent"
     snapshot_interval: int = 5
     max_pool_size: int = 20
@@ -66,9 +68,12 @@ def run_directory(config: RunConfig) -> Path:
         if config.max_update_norm is None
         else f"max_update_norm_{value_token(config.max_update_norm)}"
     )
+    root = PROJECT_ROOT / "models"
+    if config.feature_set != "base":
+        root = root / f"feature_set_{config.feature_set}"
+
     return (
-        PROJECT_ROOT
-        / "models"
+        root
         / f"learning_rate_{value_token(config.learning_rate)}"
         / config.reward_mode
         / (
@@ -109,6 +114,8 @@ def train_command(config: RunConfig, python_bin: str) -> list[str]:
         config.init_scale,
         "--learning-rate",
         config.learning_rate,
+        "--feature-set",
+        config.feature_set,
         "--baseline",
         config.baseline,
         "--reward-mode",
@@ -163,6 +170,7 @@ def cartesian(
     matchup_samplings: Iterable[str],
     reward_mode: str,
     reward_presets: Iterable[str],
+    feature_sets: Iterable[str] = ("base",),
     max_update_norms: Iterable[str | None] = (None,),
 ) -> list[RunConfig]:
     """Build a deterministic list of run configs."""
@@ -170,27 +178,29 @@ def cartesian(
     configs: list[RunConfig] = []
     for seed in seeds:
         for learning_rate in learning_rates:
-            for bootstrap in bootstrap_updates:
-                for matchup in matchup_samplings:
-                    for preset in reward_presets:
-                        alpha, lambda_margin = REWARD_PRESETS[preset]
-                        for max_update_norm in max_update_norms:
-                            configs.append(
-                                RunConfig(
-                                    phase=phase,
-                                    seed=seed,
-                                    batch_size=batch_size,
-                                    updates=updates,
-                                    evaluation_games=evaluation_games,
-                                    learning_rate=learning_rate,
-                                    bootstrap_updates=bootstrap,
-                                    matchup_sampling=matchup,
-                                    reward_mode=reward_mode,
-                                    reward_alpha=alpha,
-                                    reward_lambda_margin=lambda_margin,
-                                    max_update_norm=max_update_norm,
+            for feature_set in feature_sets:
+                for bootstrap in bootstrap_updates:
+                    for matchup in matchup_samplings:
+                        for preset in reward_presets:
+                            alpha, lambda_margin = REWARD_PRESETS[preset]
+                            for max_update_norm in max_update_norms:
+                                configs.append(
+                                    RunConfig(
+                                        phase=phase,
+                                        seed=seed,
+                                        batch_size=batch_size,
+                                        updates=updates,
+                                        evaluation_games=evaluation_games,
+                                        learning_rate=learning_rate,
+                                        feature_set=feature_set,
+                                        bootstrap_updates=bootstrap,
+                                        matchup_sampling=matchup,
+                                        reward_mode=reward_mode,
+                                        reward_alpha=alpha,
+                                        reward_lambda_margin=lambda_margin,
+                                        max_update_norm=max_update_norm,
+                                    )
                                 )
-                            )
     return configs
 
 
@@ -261,6 +271,7 @@ def build_configs(args: argparse.Namespace) -> list[RunConfig]:
     """Build run configs for the requested protocol phase."""
 
     seeds = tuple(args.seed or [5000])
+    feature_sets = tuple(args.feature_set or ("base",))
 
     if args.phase == "stress_lr":
         return cartesian(
@@ -278,6 +289,7 @@ def build_configs(args: argparse.Namespace) -> list[RunConfig]:
             matchup_samplings=("per_episode",),
             reward_mode="combined_terminal",
             reward_presets=("current_baseline",),
+            feature_sets=feature_sets,
             max_update_norms=selected_max_update_norms(
                 args.max_update_norm,
                 (None,),
@@ -296,6 +308,7 @@ def build_configs(args: argparse.Namespace) -> list[RunConfig]:
             matchup_samplings=tuple(args.matchup_sampling or ("per_episode",)),
             reward_mode="combined_terminal",
             reward_presets=("current_baseline",),
+            feature_sets=feature_sets,
             max_update_norms=selected_max_update_norms(
                 args.max_update_norm,
                 CLIPPING_PROBE_NORMS,
@@ -316,6 +329,7 @@ def build_configs(args: argparse.Namespace) -> list[RunConfig]:
             reward_presets=tuple(
                 args.reward_preset or ("current_baseline", "balanced")
             ),
+            feature_sets=feature_sets,
             max_update_norms=selected_max_update_norms(
                 args.max_update_norm,
                 (None,),
@@ -334,6 +348,7 @@ def build_configs(args: argparse.Namespace) -> list[RunConfig]:
             matchup_samplings=tuple(args.matchup_sampling or MATCHUP_SAMPLINGS),
             reward_mode="combined_terminal",
             reward_presets=("current_baseline",),
+            feature_sets=feature_sets,
             max_update_norms=selected_max_update_norms(
                 args.max_update_norm,
                 (None,),
@@ -375,6 +390,7 @@ def build_configs(args: argparse.Namespace) -> list[RunConfig]:
             matchup_samplings=matchup_samplings,
             reward_mode="combined_terminal",
             reward_presets=("current_baseline",),
+            feature_sets=feature_sets,
             max_update_norms=selected_max_update_norms(
                 args.max_update_norm,
                 (None,),
@@ -395,6 +411,7 @@ def build_configs(args: argparse.Namespace) -> list[RunConfig]:
             matchup_samplings=matchup_samplings,
             reward_mode="combined_terminal",
             reward_presets=reward_presets,
+            feature_sets=feature_sets,
             max_update_norms=selected_max_update_norms(
                 args.max_update_norm,
                 (None,),
@@ -414,6 +431,7 @@ def build_configs(args: argparse.Namespace) -> list[RunConfig]:
             matchup_samplings=matchup_samplings,
             reward_mode="dense_presa",
             reward_presets=dense_presets,
+            feature_sets=feature_sets,
             max_update_norms=selected_max_update_norms(
                 args.max_update_norm,
                 (None,),
@@ -467,6 +485,7 @@ def main() -> None:
     parser.add_argument("--python-bin", default=sys.executable)
     parser.add_argument("--seed", action="append", type=int)
     parser.add_argument("--learning-rate", action="append")
+    parser.add_argument("--feature-set", action="append", choices=FEATURE_SETS)
     parser.add_argument("--bootstrap-updates", action="append", type=int)
     parser.add_argument(
         "--max-update-norm",
