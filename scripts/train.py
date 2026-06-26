@@ -27,10 +27,9 @@ from evaluation import (
 )
 from policy import (
     FEATURE_SET_NAMES,
-    BriscolaFeatureExtractor,
+    FeatureExtractor,
     LinearSoftmaxPolicy,
     NeuralSoftmaxPolicy,
-    NewFeatureSetExtractor,
     build_feature_extractor,
 )
 from training import (
@@ -338,7 +337,7 @@ def stats_to_dict(stats: SelfPlayStats) -> dict[str, Any]:
 
 def initialize_learner(
     args: argparse.Namespace,
-    extractor: BriscolaFeatureExtractor | NewFeatureSetExtractor,
+    extractor: FeatureExtractor,
 ) -> LinearSoftmaxPolicy | NeuralSoftmaxPolicy:
     """Create the requested learner without changing the default linear path."""
 
@@ -482,7 +481,7 @@ def metrics_to_dict(metrics: EvaluationMetrics) -> dict[str, Any]:
 def checkpoint_to_dict(
     *,
     args: argparse.Namespace,
-    extractor: BriscolaFeatureExtractor | NewFeatureSetExtractor,
+    extractor: FeatureExtractor,
     learner: LinearSoftmaxPolicy | NeuralSoftmaxPolicy,
     pool: SnapshotPool,
     trainer: SelfPlayTrainer,

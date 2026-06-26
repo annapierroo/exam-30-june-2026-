@@ -8,6 +8,7 @@ from policy.new_feature_set import (
     DEFAULT_ATOMIC_FEATURE_NAMES,
     DEFAULT_FEATURE_NAMES,
     DEFAULT_INTERACTION_FEATURE_NAMES,
+    NEW_CONTEXT_FACTOR_FEATURE_NAMES,
     NewFeatureSetExtractor,
 )
 
@@ -101,6 +102,44 @@ class TestNewFeatureSetExtractor(unittest.TestCase):
         self.assertFalse(
             set(extractor.atomic_feature_names)
             & set(extractor.interaction_feature_names),
+        )
+
+    def test_fattori_contesto_sono_selezionabili_senza_modificare_default(self):
+        # I fattori dei prodotti restano disponibili anche come coordinate singole.
+        carta = Carta("denari", "tre")
+        extractor = NewFeatureSetExtractor(
+            feature_names=list(NEW_CONTEXT_FACTOR_FEATURE_NAMES),
+        )
+        obs = osservazione(
+            mano=(carta,),
+            briscola_esposta=Carta("denari", "asso"),
+            carte_sul_campo=(
+                CartaGiocata(giocatore_id=1, carta=Carta("coppe", "asso")),
+                CartaGiocata(giocatore_id=2, carta=Carta("bastoni", "re")),
+                CartaGiocata(giocatore_id=3, carta=Carta("denari", "due")),
+            ),
+            indice_presa=6,
+        )
+
+        values = extractor.extract(obs, carta)
+
+        self.assertEqual(feature(extractor, values, "presa_povera"), 0.0)
+        self.assertEqual(feature(extractor, values, "presa_media"), 0.0)
+        self.assertEqual(feature(extractor, values, "presa_ricca"), 1.0)
+        self.assertEqual(feature(extractor, values, "ultime_quattro_prese"), 1.0)
+        self.assertEqual(feature(extractor, values, "quartultima_presa"), 1.0)
+        self.assertEqual(feature(extractor, values, "tavolo_ha_carico"), 0.0)
+        self.assertEqual(feature(extractor, values, "tavolo_ha_taglietto"), 1.0)
+        self.assertEqual(feature(extractor, values, "tavolo_ha_briscola_alta"), 0.0)
+        self.assertEqual(feature(extractor, values, "punti_briscola_esposta"), 1.0)
+        self.assertEqual(feature(extractor, values, "forza_briscola_esposta"), 1.0)
+        self.assertEqual(
+            extractor.atomic_feature_names,
+            NEW_CONTEXT_FACTOR_FEATURE_NAMES,
+        )
+        self.assertFalse(extractor.interaction_feature_names)
+        self.assertTrue(
+            set(NEW_CONTEXT_FACTOR_FEATURE_NAMES).isdisjoint(DEFAULT_FEATURE_NAMES)
         )
 
     def test_categorie_carta_separano_carico_non_briscola_e_briscole(self):

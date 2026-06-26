@@ -26,3 +26,17 @@ class Policy(Protocol):
     ) -> Carta:
         """Select one legal action from the observation."""
         ...
+
+
+class FeatureExtractor(Protocol):
+    """Minimal interface shared by selectable policy feature schemas."""
+
+    feature_names: list[str]
+
+    def size(self) -> int:
+        """Return the fixed vector dimension."""
+        ...
+
+    def extract(self, osservazione: Osservazione, carta: Carta) -> list[float]:
+        """Extract one legal-action feature vector."""
+        ...

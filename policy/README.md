@@ -36,9 +36,15 @@ All policies implement the minimal `Policy` protocol:
 
 ## Features
 
-- `BriscolaFeatureExtractor`: builds numeric features from a legal
-  `Osservazione` and a legal candidate card for learnable policies, without
-  using hidden game state.
+- `BriscolaFeatureExtractor`: historical base feature representation built from
+  a legal `Osservazione` and a legal candidate card.
+- `NewFeatureSetExtractor`: historical alternative representation with a
+  larger set of engineered interactions.
+- `AlignedFeatureExtractor`: shared atomic representation used by
+  `base_aligned` and `new_aligned`, so those two feature sets differ only in
+  their engineered interactions.
+- `build_feature_extractor(...)`: central selector for the named feature sets
+  used by training and checkpoint reconstruction.
 
 ## Tests
 

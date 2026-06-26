@@ -60,6 +60,24 @@ class TestFeatureSets(unittest.TestCase):
             new_interactions.interaction_feature_names,
         )
 
+    def test_aligned_feature_sets_condividono_la_stessa_base_atomica(self):
+        # Le varianti allineate cambiano solo le interazioni aggiunte alla base comune.
+        common_atomic = build_feature_extractor("common_atomic")
+        base_aligned = build_feature_extractor("base_aligned")
+        new_aligned = build_feature_extractor("new_aligned")
+
+        self.assertEqual(common_atomic.size(), 73)
+        self.assertEqual(base_aligned.size(), 85)
+        self.assertEqual(new_aligned.size(), 141)
+        self.assertEqual(
+            tuple(common_atomic.feature_names),
+            common_atomic.atomic_feature_names,
+        )
+        self.assertEqual(base_aligned.atomic_feature_names, common_atomic.atomic_feature_names)
+        self.assertEqual(new_aligned.atomic_feature_names, common_atomic.atomic_feature_names)
+        self.assertEqual(len(base_aligned.interaction_feature_names), 12)
+        self.assertEqual(len(new_aligned.interaction_feature_names), 68)
+
     def test_feature_set_names_are_only_supported_public_names(self):
         # Evita alias duplicati che renderebbero confusa la griglia sperimentale.
         self.assertEqual(
@@ -71,6 +89,9 @@ class TestFeatureSets(unittest.TestCase):
                 "new_interactions",
                 "new_atomic",
                 "new_interactions_only",
+                "common_atomic",
+                "base_aligned",
+                "new_aligned",
             },
         )
 

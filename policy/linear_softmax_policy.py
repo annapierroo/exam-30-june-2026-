@@ -12,6 +12,7 @@ import numpy as np
 from game.cards import Carta
 from game.observation import Osservazione
 
+from .base import FeatureExtractor
 from .features import BriscolaFeatureExtractor
 
 
@@ -20,7 +21,7 @@ class LinearSoftmaxPolicy:
     """Linear action preferences followed by a masked softmax over legal cards."""
 
     theta: Sequence[float] | np.ndarray
-    feature_extractor: BriscolaFeatureExtractor = field(
+    feature_extractor: FeatureExtractor = field(
         default_factory=BriscolaFeatureExtractor
     )
     name: str = "linear_softmax"
@@ -32,7 +33,7 @@ class LinearSoftmaxPolicy:
     @classmethod
     def initialize(
         cls,
-        feature_extractor: BriscolaFeatureExtractor | None = None,
+        feature_extractor: FeatureExtractor | None = None,
         rng: random.Random | None = None,
         scale: float = 0.01,
         name: str = "linear_softmax",

@@ -43,6 +43,21 @@ DEFAULT_ATOMIC_FEATURE_NAMES: tuple[str, ...] = (
     "carta_fa_pescare_briscola_esposta_alla_squadra_nostra",
 )
 
+# These values already feed engineered products below. Keeping them selectable
+# on their own lets another policy representation learn non-linear products.
+NEW_CONTEXT_FACTOR_FEATURE_NAMES: tuple[str, ...] = (
+    "presa_povera",
+    "presa_media",
+    "presa_ricca",
+    "ultime_quattro_prese",
+    "quartultima_presa",
+    "tavolo_ha_carico",
+    "tavolo_ha_taglietto",
+    "tavolo_ha_briscola_alta",
+    "punti_briscola_esposta",
+    "forza_briscola_esposta",
+)
+
 DEFAULT_INTERACTION_FEATURE_NAMES: tuple[str, ...] = (
     "posizione_primo_x_carta_liscia",
     "posizione_primo_x_carta_punticino",
@@ -142,7 +157,9 @@ class NewFeatureSetExtractor:
     def atomic_feature_names(self) -> tuple[str, ...]:
         """Return the active non-interaction feature names."""
 
-        atomic_names = set(DEFAULT_ATOMIC_FEATURE_NAMES)
+        atomic_names = set(
+            DEFAULT_ATOMIC_FEATURE_NAMES + NEW_CONTEXT_FACTOR_FEATURE_NAMES,
+        )
         return tuple(name for name in self.feature_names if name in atomic_names)
 
     @property
@@ -260,6 +277,16 @@ class NewFeatureSetExtractor:
             "carta_taglietto": float(carta_taglietto),
             "carta_briscola_alta": float(carta_briscola_alta),
             "carta_tre_briscola": float(carta_tre_briscola),
+            "presa_povera": float(presa_povera),
+            "presa_media": float(presa_media),
+            "presa_ricca": float(presa_ricca),
+            "ultime_quattro_prese": float(ultime_quattro_prese),
+            "quartultima_presa": float(quartultima_presa),
+            "tavolo_ha_carico": float(tavolo_ha_carico),
+            "tavolo_ha_taglietto": float(tavolo_ha_taglietto),
+            "tavolo_ha_briscola_alta": float(tavolo_ha_briscola_alta),
+            "punti_briscola_esposta": punti_briscola_esposta,
+            "forza_briscola_esposta": forza_briscola_esposta,
             "posizione_primo_x_carta_liscia": (
                 float(posizione_primo) * float(carta_liscia)
             ),

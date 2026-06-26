@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from policy import BriscolaFeatureExtractor, LinearSoftmaxPolicy, NeuralSoftmaxPolicy
+from policy import FeatureExtractor, LinearSoftmaxPolicy, NeuralSoftmaxPolicy
 
 
 POLICY_TYPE_LINEAR = "linear"
@@ -29,7 +29,7 @@ class Snapshot:
 class SnapshotPool:
     """Mechanical pool of sampleable historical snapshots."""
 
-    feature_extractor: BriscolaFeatureExtractor
+    feature_extractor: FeatureExtractor
     max_size: int = 20
     keep_initial: bool = False
     snapshots: list[Snapshot] = field(default_factory=list)

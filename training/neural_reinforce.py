@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 from game.observation import Osservazione
-from policy import BriscolaFeatureExtractor, NeuralSoftmaxPolicy
+from policy import BriscolaFeatureExtractor, FeatureExtractor, NeuralSoftmaxPolicy
 
 from .episode import EpisodeResult
 from .reinforce import (
@@ -29,7 +29,7 @@ class NeuralValueBaseline(nn.Module):
 
     def __init__(
         self,
-        feature_extractor: BriscolaFeatureExtractor | None = None,
+        feature_extractor: FeatureExtractor | None = None,
         hidden_size: int = 64,
     ) -> None:
         super().__init__()
@@ -46,7 +46,7 @@ class NeuralValueBaseline(nn.Module):
     @classmethod
     def initialize(
         cls,
-        feature_extractor: BriscolaFeatureExtractor | None = None,
+        feature_extractor: FeatureExtractor | None = None,
         rng: random.Random | None = None,
         hidden_size: int = 64,
         scale: float = 0.01,

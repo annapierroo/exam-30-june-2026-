@@ -13,6 +13,7 @@ from torch.nn import functional as F
 from game.cards import Carta
 from game.observation import Osservazione
 
+from .base import FeatureExtractor
 from .features import BriscolaFeatureExtractor
 from .linear_softmax_policy import vector_norm
 
@@ -23,7 +24,7 @@ class NeuralSoftmaxPolicy(nn.Module):
     def __init__(
         self,
         theta: Sequence[float] | np.ndarray | None = None,
-        feature_extractor: BriscolaFeatureExtractor | None = None,
+        feature_extractor: FeatureExtractor | None = None,
         hidden_size: int = 64,
         name: str = "neural_softmax",
     ) -> None:
@@ -45,7 +46,7 @@ class NeuralSoftmaxPolicy(nn.Module):
     @classmethod
     def initialize(
         cls,
-        feature_extractor: BriscolaFeatureExtractor | None = None,
+        feature_extractor: FeatureExtractor | None = None,
         rng: random.Random | None = None,
         hidden_size: int = 64,
         scale: float = 0.01,
