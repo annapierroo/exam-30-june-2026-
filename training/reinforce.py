@@ -52,7 +52,6 @@ class TrainablePolicy(Protocol):
         self,
         gradient: np.ndarray,
         learning_rate: float,
-        max_update_norm: float | None = None,
     ) -> None:
         """Apply one policy-gradient update."""
         ...
@@ -72,8 +71,6 @@ class ReinforceConfig:
 
     learning_rate: float = 0.01
     baseline: BaselineMode = "time_dependent"
-    # Default None: clipping is a hyperparameter, not part of the initial protocol.
-    max_update_norm: float | None = None
     entropy_coef: float = 0.0
 
     def __post_init__(self) -> None:
@@ -81,8 +78,6 @@ class ReinforceConfig:
             raise ValueError("learning_rate deve essere non negativo")
         if self.baseline not in BASELINE_MODES:
             raise ValueError(f"Baseline non supportata: {self.baseline}")
-        if self.max_update_norm is not None and self.max_update_norm < 0.0:
-            raise ValueError("max_update_norm deve essere non negativo o None")
         if self.entropy_coef < 0.0:
             raise ValueError("entropy_coef deve essere non negativo")
 
@@ -149,7 +144,6 @@ def reinforce_update(
     policy.apply_gradient(
         gradient,
         learning_rate=config.learning_rate,
-        max_update_norm=config.max_update_norm,
     )
 
     return TrainStats(

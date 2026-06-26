@@ -46,7 +46,6 @@ class FakeLinearPolicy:
     entropy_gradient_value: float = 2.0
     applied_gradient: np.ndarray | None = None
     applied_learning_rate: float | None = None
-    applied_max_update_norm: float | None = None
 
     def grad_log_probability(
         self,
@@ -65,11 +64,9 @@ class FakeLinearPolicy:
         self,
         gradient: np.ndarray,
         learning_rate: float,
-        max_update_norm: float | None = None,
     ) -> None:
         self.applied_gradient = np.asarray(gradient, dtype=np.float32).copy()
         self.applied_learning_rate = learning_rate
-        self.applied_max_update_norm = max_update_norm
         self.theta += np.float32(learning_rate) * self.applied_gradient
 
 
@@ -113,7 +110,6 @@ class TestReinforceUpdate(unittest.TestCase):
 
         self.assertEqual(config.learning_rate, 0.01)
         self.assertEqual(config.baseline, "time_dependent")
-        self.assertIsNone(config.max_update_norm)
         self.assertEqual(config.entropy_coef, 0.0)
         self.assertEqual(ReinforceConfig(baseline="none").baseline, "none")
         self.assertEqual(ReinforceConfig(baseline="batch_mean").baseline, "batch_mean")
@@ -125,9 +121,6 @@ class TestReinforceUpdate(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             ReinforceConfig(baseline="non_tra_le_opzioni")  # type: ignore[arg-type]
-
-        with self.assertRaises(ValueError):
-            ReinforceConfig(max_update_norm=-1.0)
 
         with self.assertRaises(ValueError):
             ReinforceConfig(entropy_coef=-0.1)
@@ -171,23 +164,18 @@ class TestReinforceUpdate(unittest.TestCase):
         self.assertEqual(stats.baseline_values, (3.0, 15.0))
         self.assertAlmostEqual(float(policy.applied_gradient[0]), 0.0)
 
-    def test_update_modifica_theta_e_propaga_config(self):
-        # The update applies gradient, learning rate, and optional clipping to the policy.
+    def test_update_modifica_theta_e_propaga_learning_rate(self):
+        # The update applies the accumulated gradient with the configured rate.
         policy = FakeLinearPolicy(theta=np.asarray([0.0], dtype=np.float32))
 
         reinforce_update(
             policy,  # type: ignore[arg-type]
             [episodio([2.0])],
-            ReinforceConfig(
-                learning_rate=0.5,
-                baseline="none",
-                max_update_norm=3.0,
-            ),
+            ReinforceConfig(learning_rate=0.5, baseline="none"),
         )
 
         self.assertAlmostEqual(float(policy.applied_gradient[0]), 2.0)
         self.assertEqual(policy.applied_learning_rate, 0.5)
-        self.assertEqual(policy.applied_max_update_norm, 3.0)
         self.assertAlmostEqual(float(policy.theta[0]), 1.0)
 
     def test_entropy_coef_aggiunge_gradiente_di_esplorazione(self):

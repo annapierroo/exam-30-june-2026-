@@ -146,16 +146,12 @@ class LinearSoftmaxPolicy:
         self,
         gradient: Sequence[float] | np.ndarray,
         learning_rate: float,
-        max_update_norm: float | None = None,
     ) -> None:
-        """Apply a gradient step, optionally clipping the update direction."""
+        """Apply a gradient step."""
 
         gradient_array = np.asarray(gradient, dtype=np.float32)
         if gradient_array.shape != self.theta.shape:
             raise ValueError("Gradient size must match theta size")
-        if max_update_norm is not None:
-            gradient_array = clip_vector(gradient_array, max_update_norm)
-
         self.theta += np.float32(learning_rate) * gradient_array
 
     def _features(self, osservazione: Osservazione, carta: Carta) -> np.ndarray:
@@ -240,12 +236,3 @@ def entropy_from_probabilities(probabilities: Iterable[float]) -> float:
             for probability in probabilities
         )
     )
-
-
-def clip_vector(vector: Sequence[float] | np.ndarray, max_norm: float) -> np.ndarray:
-    vector_array = np.asarray(vector, dtype=np.float32)
-    norm = vector_norm(vector)
-    if norm <= max_norm or norm == 0:
-        return vector_array
-    scale = max_norm / norm
-    return (vector_array * np.float32(scale)).astype(np.float32)

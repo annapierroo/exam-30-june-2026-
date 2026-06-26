@@ -185,17 +185,6 @@ class TestLinearSoftmaxPolicy(unittest.TestCase):
 
         self.assertAlmostEqual(policy.theta[0], 0.2)
 
-    # Clipping remains supported by the code, but it is not part of the initial protocol.
-    # We will re-enable it as a test once we choose a justified experimental threshold.
-    # def test_apply_gradient_puo_clippare_la_norma(self):
-    #     extractor = BriscolaFeatureExtractor(feature_names=["carta_asso", "carta_tre"])
-    #     policy = LinearSoftmaxPolicy(theta=[0.0, 0.0], feature_extractor=extractor)
-    #
-    #     policy.apply_gradient([3.0, 4.0], learning_rate=1.0, max_update_norm=1.0)
-    #
-    #     self.assertAlmostEqual(policy.theta[0], 0.6)
-    #     self.assertAlmostEqual(policy.theta[1], 0.8)
-
     def test_apply_gradient_con_dimensione_errata_solleva_value_error(self):
         # The gradient must have one component for each parameter.
         extractor = BriscolaFeatureExtractor(feature_names=["carta_asso"])

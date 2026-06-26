@@ -86,7 +86,6 @@ def parse_args() -> argparse.Namespace:
         choices=sorted(BASELINE_MODES),
         default="time_dependent",
     )
-    parser.add_argument("--max-update-norm", type=float, default=None)
     parser.add_argument("--entropy-coef", type=float, default=0.0)
     neural_baseline_group = parser.add_mutually_exclusive_group()
     neural_baseline_group.add_argument(
@@ -181,7 +180,6 @@ def main() -> None:
     reinforce_config = ReinforceConfig(
         learning_rate=args.learning_rate,
         baseline=args.baseline,
-        max_update_norm=args.max_update_norm,
         entropy_coef=args.entropy_coef,
     )
     self_play_config = SelfPlayConfig(
@@ -512,7 +510,6 @@ def checkpoint_to_dict(
             "init_scale": args.init_scale,
             "learning_rate": args.learning_rate,
             "baseline": args.baseline,
-            "max_update_norm": args.max_update_norm,
             "entropy_coef": args.entropy_coef,
             "neural_learned_baseline": args.neural_learned_baseline,
             "reward_mode": args.reward_mode,
